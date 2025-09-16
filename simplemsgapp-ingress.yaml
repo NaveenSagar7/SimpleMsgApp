@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: simplemsgapp-ingress
+  namespace: project-4-namespace
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: simplemsgapp.sagarproject.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix  
+        backend:
+          service:
+            name: simplemsgapp-service
+            port:
+              number: 80

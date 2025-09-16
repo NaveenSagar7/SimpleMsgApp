@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simplemsgapp-deployment
+  namespace: project-4-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simplemsgapp-web
+  template:
+    metadata:
+      labels:
+        app: simplemsgapp-web
+    spec:
+      imagePullSecrets:
+      - name: my-registry-key
+      containers:
+      - name: simplemsgapp
+        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/simplemsgapp:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: simplemsgapp-config
+              key: DB_HOST
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: simplemsgapp-secret
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: simplemsgapp-secret
+              key: DB_PASSWORD
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: simplemsgapp-secret
+              key: DB_NAME
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: simplemsgapp-config
+              key: DB_PORT
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: simplemsgapp-service
+  namespace: project-4-namespace
+spec:
+  selector:
+    app: simplemsgapp-web
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+  type: LoadBalancer

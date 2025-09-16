@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simplemsgapp-config
+  namespace: project-4-namespace
+data:
+  DB_HOST: simplemsgapp-db-service.project-4-namespace.svc.cluster.local
+  DB_PORT: "5432"

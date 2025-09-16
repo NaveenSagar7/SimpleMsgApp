@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simplemsgapp-db-deployment
+  namespace: project-4-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simplemsgapp-db-web
+  template:
+    metadata:
+      labels:
+        app: simplemsgapp-db-web
+    spec:
+      imagePullSecrets:
+      - name: my-registry-key
+      containers:
+      - name: simplemsgapp-db
+        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/db-for-simplemsgapp:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: simplemsgapp-secret
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: simplemsgapp-secret
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: simplemsgapp-secret
+              key: POSTGRES_PASSWORD
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: postgres-storage
+  
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+  
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: simplemsgapp-db-service
+  namespace: project-4-namespace
+spec:
+  selector:
+    app: simplemsgapp-db-web
+  ports:
+  - protocol: TCP
+    port: 5432
+    targetPort: 5432
+  type: ClusterIP
