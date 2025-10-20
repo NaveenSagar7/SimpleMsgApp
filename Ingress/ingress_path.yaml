@@ -1,0 +1,56 @@
+#NOTE : THERE IS NO REGEX/REWRITE OPTION IN AWS ALB , LIKE IN NGNIX
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-ingress
+  namespace: firstapp
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip   # or "instance" if you use NodePort Services
+spec:
+  ingressClassName: alb
+  rules:
+  - http:
+      paths:
+      #Order /second before / to keep matching unambiguous.
+      - path: /me      # make sure your application server at /me instead of /
+        pathType: Prefix
+        backend:
+          service:
+            name: secondapp-service
+            port:
+              number: 80
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: firstapp-service
+            port:
+              number: 80
+
+        
+
+
+
+#FOR ALB with a particular Route53 DNS name 
+#spec:
+#  ingressClassName: alb
+#  rules:
+#  - host: firstapp.sagarproject.com  #If you have a route53 dns or else you can comment it out
+#    http:
+#      paths:
+#      - path: /me   # Make sure your application also servers at /me instead of /
+#        pathType: Prefix
+#        backend:
+#          service:
+#            name: second-service
+#           port:
+#              number: 80
+#      - path: /      
+#        pathType: Prefix
+#        backend:
+#          service:
+#            name: firstapp-service
+#            port:
+#              number: 80

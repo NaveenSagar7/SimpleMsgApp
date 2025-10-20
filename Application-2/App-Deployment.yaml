@@ -1,23 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: simplemsgapp-deployment
-  namespace: project-4-namespace
+  name: secondapp-deployment
+  namespace: secondapp
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: simplemsgapp-web
+      app: secondapp-web
   template:
     metadata:
       labels:
-        app: simplemsgapp-web
+        app: secondapp-web
     spec:
-      imagePullSecrets:
-      - name: my-registry-key
       containers:
-      - name: simplemsgapp
-        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/simplemsgapp:1.0
+      - name: secondapp
+        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/secondapp:1.0
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
@@ -25,27 +23,27 @@ spec:
         - name: DB_HOST
           valueFrom:
             configMapKeyRef:
-              name: simplemsgapp-config
+              name: secondapp-config
               key: DB_HOST
         - name: DB_USER
           valueFrom:
             secretKeyRef:
-              name: simplemsgapp-secret
+              name: secondapp-secret
               key: DB_USER
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: simplemsgapp-secret
+              name: secondapp-secret
               key: DB_PASSWORD
         - name: DB_NAME
           valueFrom:
             secretKeyRef:
-              name: simplemsgapp-secret
+              name: secondapp-secret
               key: DB_NAME
         - name: DB_PORT
           valueFrom:
             configMapKeyRef:
-              name: simplemsgapp-config
+              name: secondapp-config
               key: DB_PORT
 
 ---
@@ -53,13 +51,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: simplemsgapp-service
-  namespace: project-4-namespace
+  name: secondapp-service
+  namespace: secondapp
 spec:
   selector:
-    app: simplemsgapp-web
+    app: secondapp-web
   ports:
   - protocol: TCP
     port: 80
     targetPort: 3000
-  type: LoadBalancer
+  #type: ClusterIP     #Only for Fargate type of EKS
+  type: NodePort      #For EC2-node type of eks , alb look for node-ip's to target it to.

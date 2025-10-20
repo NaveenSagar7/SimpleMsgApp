@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: firstapp
+spec:
+  hard:
+    requests.cpu: "500m" #minimum 
+    limits.cpu: "500m"   #maximum
+    requests.memory: "500Mi"
+    limits.memory: "950Mi"

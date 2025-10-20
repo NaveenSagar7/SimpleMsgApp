@@ -1,0 +1,30 @@
+#Note: setting resources here overwrites the defaults from the LimitRange for this container (still must respect any min/max).
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-deployment
+  namespace: firstapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firstapp-web
+  template:
+    metadata:
+      labels:
+        app: firstapp-web
+    spec:
+      containers:
+      - name: firstapp
+        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/firstapp:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        resources:
+          requests:
+            cpu: "300m"
+            memory: "384Mi"
+          limits:
+            cpu: "600m"
+            memory: "768Mi"

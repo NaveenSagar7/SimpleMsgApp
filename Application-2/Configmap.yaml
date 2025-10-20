@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: secondapp-config
+  namespace: secondapp
+data:
+  DB_HOST: firstapp-db-service.database.svc.cluster.local
+  DB_PORT: "5432"

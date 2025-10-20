@@ -1,0 +1,60 @@
+# Namespace-scoped admin Role (superuser) — grants all verbs on all resources within one namespace.
+# Replace: NAMESPACE_NAME with your namespace (e.g., database)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ns-admin-role
+  namespace: secondapp
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+
+# --- OPTIONAL EXAMPLES (commented) ---
+# 1) Safer variant: use the built-in ClusterRole 'admin' via RoleBinding (see binding file).
+#    No Role needed; the binding references ClusterRole 'admin'.
+
+# 2) All operations EXCEPT StatefulSets (RBAC has no 'deny'; enumerate resources excluding StatefulSets).
+#    This example lists common resources without 'statefulsets' and 'statefulsets/scale'. Adjust for your cluster.
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: Role
+# metadata:
+#   name: ns-admin-no-sts
+#   namespace: NAMESPACE_NAME
+# rules:
+# - apiGroups: [""]
+#   resources: ["pods","services","endpoints","persistentvolumeclaims","configmaps","secrets","events"]
+#   verbs: ["*"]
+# - apiGroups: ["apps"]
+#   resources: ["deployments","replicasets","daemonsets","controllerrevisions"]
+#   verbs: ["*"]
+# - apiGroups: ["batch"]
+#   resources: ["jobs","cronjobs"]
+#   verbs: ["*"]
+# - apiGroups: ["networking.k8s.io"]
+#   resources: ["ingresses","networkpolicies"]
+#   verbs: ["*"]
+# - apiGroups: ["autoscaling"]
+#   resources: ["horizontalpodautoscalers"]
+#   verbs: ["*"]
+# - apiGroups: ["policy"]
+#   resources: ["poddisruptionbudgets"]
+#   verbs: ["*"]
+# - apiGroups: ["coordination.k8s.io"]
+#   resources: ["leases"]
+#   verbs: ["*"]
+# # Note: Excluded 'statefulsets' deliberately. Add it back if needed.
+
+# 3) Exec-only (support) within this namespace:
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: Role
+# metadata:
+#   name: exec-only
+#   namespace: NAMESPACE_NAME
+# rules:
+# - apiGroups: [""]
+#   resources: ["pods"]
+#   verbs: ["get","list","watch"]
+# - apiGroups: [""]
+#   resources: ["pods/exec","pods/portforward","pods/log"]
+#   verbs: ["create","get"]

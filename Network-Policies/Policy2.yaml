@@ -1,0 +1,28 @@
+#Option B: Protect only DB pods (leave other database-namespace pods untouched)
+#If you only want to isolate the DB pods (not the entire namespace), you can apply just this policy:
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-allow-apps
+  namespace: database
+spec:
+  podSelector:
+    matchLabels:
+      app: db       #This should match your Db pod labels
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: firstapp
+      podSelector:
+        matchLabels:
+          app: firstapp-web
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: secondapp
+      podSelector:
+        matchLabels:
+          app: secondapp-web

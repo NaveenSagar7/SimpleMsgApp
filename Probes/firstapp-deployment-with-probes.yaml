@@ -1,0 +1,66 @@
+# NOTE: Change /healthz and /livez if your app uses different paths; or switch to tcpSocket on 3000.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-deployment
+  namespace: firstapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firstapp-web
+  template:
+    metadata:
+      labels:
+        app: firstapp-web
+    spec:
+      containers:
+      - name: firstapp
+        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/firstapp:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: firstapp-config
+              key: DB_HOST
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: DB_PASSWORD
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: DB_NAME
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: firstapp-config
+              key: DB_PORT
+        readinessProbe:
+          httpGet:
+            path: /healthz          #App code must have this path set
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 3
+          successThreshold: 1
+        livenessProbe:
+          httpGet:
+            path: /livez            #App code must have this path set
+            port: 3000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+          successThreshold: 1

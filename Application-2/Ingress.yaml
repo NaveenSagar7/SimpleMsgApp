@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: secondapp-alb
+  namespace: secondapp
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip   # or "instance" if you use NodePort Services
+spec:
+  ingressClassName: alb
+  rules:
+  - http:
+      paths:
+      #Order /me before / to keep matching unambiguous.
+#      - path: /me      # make sure your application server at /me instead of /
+#        pathType: Prefix
+#        backend:
+#          service:
+#            name: secondapp-service
+#            port:
+#              number: 80
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: secondapp-service
+            port:
+              number: 80

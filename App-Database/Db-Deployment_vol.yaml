@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-db-deployment
+  namespace: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firstapp-db-web
+  template:
+    metadata:
+      labels:
+        app: firstapp-db-web
+    spec:
+      containers:
+      - name: firstapp-db
+        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/db:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: firstapp-secret-vol
+          mountPath: /etc/firstapp/secret
+          readOnly: true
+      volumes:
+      - name: firstapp-secret-vol
+        secret:
+          secretName: firstapp-secret
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: firstapp-db-service
+  namespace: database
+spec:
+  selector:
+    app: firstapp-db-web
+  ports:
+  - protocol: TCP
+    port: 5432
+    targetPort: 5432
+  type: ClusterIP

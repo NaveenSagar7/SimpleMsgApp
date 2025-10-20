@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Simple Messages App</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    h1 { margin-bottom: 8px; }
+    form { display: grid; gap: 8px; margin-bottom: 24px; }
+    input, textarea, button { padding: 10px; font-size: 16px; }
+    button { cursor: pointer; }
+    .msg { padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 8px; }
+    .meta { color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>Simple Messages App</h1>
+  <p>Frontend (HTML) → Backend (Node/Express) → Postgres (DB) on VERSION-2. Submitted messages are saved and listed below.</p>
+
+  <form id="form">
+    <input id="name" placeholder="Your name" required/>
+    <textarea id="message" placeholder="Your message" rows="3" required></textarea>
+    <button type="submit">Submit</button>
+  </form>
+
+  <div id="list"></div>
+
+  <script>
+    async function load() {
+      const res = await fetch('/api/list');
+      const data = await res.json();
+      const list = document.getElementById('list');
+      list.innerHTML = data.map(m => `
+        <div class="msg">
+          <div>${m.message}</div>
+          <div class="meta">— ${m.name} • ${new Date(m.created_at).toLocaleString()}</div>
+        </div>
+      `).join('');
+    }
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('name').value.trim();
+      const message = document.getElementById('message').value.trim();
+      if (!name || !message) return;
+      await fetch('/api/submit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, message }) });
+      document.getElementById('message').value = '';
+      load();
+    });
+    load();
+  </script>
+</body>
+</html>

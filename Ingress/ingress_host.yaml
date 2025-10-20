@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-alb
+  namespace: firstapp
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: instance # For ec2-node type of els cluster
+#alb.ingress.kubernetes.io/target-type: ip        # For fargate type of eks cluster
+spec:
+  ingressClassName: alb
+  rules:
+  - host: firstapp.sagarproject.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: firstapp-service
+            port:
+              number: 80
+  - host: secondapp.sagarproject.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: secondapp-service
+            port:
+              number: 8080

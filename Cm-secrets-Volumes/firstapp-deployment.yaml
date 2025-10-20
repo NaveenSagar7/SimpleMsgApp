@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-deployment
+  namespace: firstapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firstapp-web
+  template:
+    metadata:
+      labels:
+        app: firstapp-web
+    spec:
+      containers:
+      - name: firstapp
+        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/firstapp:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+        - name: firstapp-config-vol
+          mountPath: /etc/firstapp/config
+          readOnly: true
+        - name: firstapp-secret-vol
+          mountPath: /etc/firstapp/secret
+          readOnly: true
+      volumes:
+      - name: firstapp-config-vol
+        configMap:
+          name: firstapp-config
+      - name: firstapp-secret-vol
+        secret:
+          secretName: firstapp-secret
+
+
+
+#1) Every key becomes a file
+
+#Your ConfigMap firstapp-config has keys like DB_HOST, DB_PORT.
+
+#Inside the container you get:
+#/etc/firstapp/config/DB_HOST (file content = the value)
+#/etc/firstapp/config/DB_PORT
+
+#Your Secret firstapp-secret has keys like DB_USER, DB_PASSWORD, DB_NAME.
+
+#Inside the container you get:
+#/etc/firstapp/secret/DB_USER
+#/etc/firstapp/secret/DB_PASSWORD
+#/etc/firstapp/secret/DB_NAME
+
+#So it’s the same data you were injecting as env vars — just exposed as files instead of environment variables.
+
+#Values won't get hard-coded in container environment , but they are stored as files which can be changes.
+
+#As ENV-VAR :
+
+#DB_USER=appuser
+#DB_PASSWORD=apppass
+
+#As volumes :
+
+#DB_HOST="$(cat /etc/firstapp/config/DB_HOST)"
+#DB_PORT="$(cat /etc/firstapp/config/DB_PORT)"
+#DB_USER="$(cat /etc/firstapp/secret/DB_USER)"
+#DB_PASSWORD="$(cat /etc/firstapp/secret/DB_PASSWORD)"
+#DB_NAME="$(cat /etc/firstapp/secret/DB_NAME)"

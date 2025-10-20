@@ -1,0 +1,46 @@
+# Binds a Kubernetes group to the namespaced admin Role.
+# Replace: NAMESPACE_NAME with your namespace. Replace GROUP_NAME with the group from your EKS Access Entry (e.g., ns-admin).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ns-admin-binding
+  namespace: NAMESPACE_NAME
+subjects:
+- kind: Group
+  name: GROUP_NAME  # e.g., ns-admin #Make sure that this will be the kubernetes group created while attaching IAM role to the EKS cluster
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: ns-admin-role
+  apiGroup: rbac.authorization.k8s.io
+
+# --- OPTIONAL EXAMPLES (commented) ---
+# 1) Bind the group to the built-in ClusterRole 'admin' (safer than wildcard Role):
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   name: ns-admin-binding-to-built-in
+#   namespace: NAMESPACE_NAME
+# subjects:
+# - kind: Group
+#   name: GROUP_NAME   # e.g., ns-admin
+#   apiGroup: rbac.authorization.k8s.io
+# roleRef:
+#   kind: ClusterRole
+#   name: admin
+#   apiGroup: rbac.authorization.k8s.io
+
+# 2) Bind exec-only Role (from example 3 in the Role file):
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   name: exec-only-binding
+#   namespace: NAMESPACE_NAME
+# subjects:
+# - kind: Group
+#   name: GROUP_NAME
+#   apiGroup: rbac.authorization.k8s.io
+# roleRef:
+#   kind: Role
+#   name: exec-only
+#   apiGroup: rbac.authorization.k8s.io

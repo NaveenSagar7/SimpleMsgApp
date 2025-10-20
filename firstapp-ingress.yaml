@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: firstapp-ingress
+  namespace: firstapp
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: instance
+#alb.ingress.kubernetes.io/target-type: ip        # For fargate type of eks cluster
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+        - path: /
+          pathType: Prefix  
+          backend:
+            service:
+              name: firstapp-service
+              port:
+                number: 80

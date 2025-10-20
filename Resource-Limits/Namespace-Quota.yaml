@@ -1,0 +1,50 @@
+# Always Remember , we can't add resource quota for a namespace while creating a namespace
+# We should create a ResourceQuota and assign it with namespace
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: firstapp
+spec:
+  hard:
+    requests.cpu: "900m" #minimum 
+    limits.cpu: "900m"   #maximum
+    requests.memory: "1536Mi"
+    limits.memory: "1536Mi"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: secondapp
+spec:
+  hard:
+    requests.cpu: "900m"
+    limits.cpu: "900m"
+    requests.memory: "1536Mi"
+    limits.memory: "1536Mi"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: thirdapp
+spec:
+  hard:
+    requests.cpu: "900m"
+    limits.cpu: "900m"
+    requests.memory: "1536Mi"
+    limits.memory: "1536Mi"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: database
+spec:
+  hard:
+    requests.cpu: "900m"
+    limits.cpu: "900m"
+    requests.memory: "1536Mi"
+    limits.memory: "1536Mi"

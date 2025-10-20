@@ -1,0 +1,38 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: firstapp-alb
+  namespace: firstapp
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    # Weighted forward: adjust weights during rollout
+    alb.ingress.kubernetes.io/actions.weighted-root: >
+      {"type":"forward","forwardConfig":{"targetGroups":[
+        {"serviceName":"firstapp-service","servicePort":"80","weight":75},
+        {"serviceName":"firstapp-v1-service","servicePort":"80","weight":25}
+      ]}}
+spec:
+  ingressClassName: alb
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: weighted-root
+            port:
+              name: use-annotation
+      # Optional: direct path to me for smoke tests
+#     - path: /v1
+#        pathType: Prefix
+#        backend:
+#          service:
+#            name: firstapp-v1-service
+#            port:
+#              number: 80
+
+#NOTE : MAKE SURE YOUR NEW VERSIONED APP SERVERS AT BOTH / AND /me IF YOU USE SMOKE TESTS
+
+

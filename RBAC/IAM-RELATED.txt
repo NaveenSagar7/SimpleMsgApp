@@ -1,0 +1,85 @@
+Here’s your compact, “words-only” cheat sheet:
+
+1. **Create IAM users and a blank group**
+   – Make the user(s). Create a group (no policies yet). Add the users to this group.
+   – This Step 1 is the same for any persona (db-ops, ns-admin, read-only, etc.).
+
+2. **Give the group permission to Assume a specific role**
+   – Create one customer-managed policy that says “members of this group may AssumeRole into `<YourRole>`” (ideally require MFA).
+   – Attach this policy to the group.
+
+3. **Create the IAM role that users will assume**
+   – Trust relationship: list who is allowed to assume it (your users or your account).
+   – Permissions on the role: only what’s needed for kubectl to connect (just `DescribeCluster` on your EKS cluster).
+   – Result: assuming this role proves identity to EKS; it does **not** grant Kubernetes actions.
+
+4. **Bridge IAM to Kubernetes with an EKS Access Entry**
+   – In the EKS cluster “Access” tab, map that role to a Kubernetes **group** (e.g., `db-ops`), set a friendly username template (e.g., `db-ops-{{SessionName}}`).
+   – This step defines which K8s group the role lands in. There’s no Group object in Kubernetes; it’s just this mapping.
+
+5. **Authorize actions inside the cluster with Kubernetes RBAC**
+   – Create a **Role** in the target namespace describing exactly what’s allowed.
+   – Create a **RoleBinding** in that namespace that binds the **group** from Step 4 (e.g., `db-ops`) to that Role.
+
+6. **StatefulSet-only persona (example)**
+   – Role rules focus on `StatefulSets` (and `StatefulSets/scale`), plus pod access needed for day-2 ops (e.g., `pods/exec`, `pods/log`) in the DB namespace.
+   – Bind `db-ops` to this Role with a RoleBinding in that namespace.
+
+7. **Namespace admin persona (variation)**
+   – Keep IAM and Access Entry the same pattern; use a different role/group (e.g., `ns-admin`).
+   – Bind that group to the built-in `admin` ClusterRole **in that namespace** to grant full namespace control.
+
+8. **Re-use vs separation**
+   – You can reuse the same IAM role across multiple namespaces by adding more RoleBindings.
+   – For different personas, create separate IAM roles and Kubernetes groups (clean least-privilege and better audit).
+
+9. **Mental model**
+   – IAM user → group → policy (may assume role) → assume role (trust + DescribeCluster) → **Access Entry (role → K8s group)** → **Kubernetes RBAC (Role + RoleBinding)** → actual permissions inside the namespace.
+
+
+
+iam-policy attached for group :
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "AllowAssumeDBOpsRole",
+    "Effect": "Allow",
+    "Action": "sts:AssumeRole",
+    "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/EKSDBOpsRole",
+    "Condition": { "Bool": { "aws:MultiFactorAuthPresent": "true" } }
+  }]
+}
+
+Custom-trust policy while creating IAM Role called "EKSDBOPsRole"
+
+{
+  "Version": "2012-10-17",
+  "Statement": [{ "Effect": "Allow", "Principal": { "AWS": [
+    "arn:aws:iam::<ACCOUNT_ID>:user/alice",
+    "arn:aws:iam::<ACCOUNT_ID>:user/bob"
+  ]}, "Action": "sts:AssumeRole" }]
+}
+
+inline policy we attach to the role "EKSDBOPsRole"
+
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["eks:DescribeCluster"],
+    "Resource": "arn:aws:eks:ap-south-1:<ACCOUNT_ID>:cluster/eks-demo"
+  }]
+}
+
+
+Associating IAM with EKS cluster
+
+aws eks create-access-entry \
+  --cluster-name "$CLUSTER" \
+  --region "$REGION" \
+  --principal-arn "arn:aws:iam::$ACCOUNT_ID:role/$ROLE_NAME" \
+  --type STANDARD \
+  --username "db-ops-{{SessionName}}" \
+  --kubernetes-groups db-ops
+
+

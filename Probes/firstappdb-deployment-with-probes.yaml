@@ -1,0 +1,59 @@
+# NOTE: Readiness uses pg_isready; if not present in your image, use a tcpSocket probe on 5432 for readiness too.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-db-deployment
+  namespace: firstapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firstapp-db-web
+  template:
+    metadata:
+      labels:
+        app: firstapp-db-web
+    spec:
+      containers:
+      - name: firstapp-db
+        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/db:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: POSTGRES_PASSWORD
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready      #the official postgres:16 image includes pg_isready endpoint
+            - -h
+            - 127.0.0.1
+            - -p
+            - '5432'
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+          successThreshold: 1
+        livenessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
