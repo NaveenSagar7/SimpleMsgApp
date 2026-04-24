@@ -54,3 +54,6 @@ spec:
 #            name: firstapp-service
 #            port:
 #              number: 80
+
+#http://firstapp.sagarproject.com/me  --> secondapp-service
+#http://firstapp.sagarproject.com/   --> firstapp-service

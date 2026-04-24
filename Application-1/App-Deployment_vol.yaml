@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: firstapp
-        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/firstapp:1.0
+        image: naveen352/msgapp:1.0
         imagePullPolicy: Always
         ports:
         - containerPort: 3000

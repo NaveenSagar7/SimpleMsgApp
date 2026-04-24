@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: secondapp
-        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/secondapp:1.0
+        image: naveen352/msgapp2:1.0
         imagePullPolicy: Always
         ports:
         - containerPort: 3000

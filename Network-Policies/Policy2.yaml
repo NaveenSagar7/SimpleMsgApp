@@ -26,3 +26,5 @@ spec:
       podSelector:
         matchLabels:
           app: secondapp-web
+
+#The other pods in the database namespace will still be accessible to anyone, but only the db pods will be protected by this policy.

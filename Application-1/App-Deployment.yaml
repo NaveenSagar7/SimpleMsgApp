@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: firstapp
-        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/firstapp:1.0
+        image: naveen352/msgapp:1.0
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
@@ -87,4 +87,5 @@ spec:
     port: 80
     targetPort: 3000
   #type: ClusterIP     #Only for Fargate type of EKS
-  type: NodePort      #For EC2-node type of eks , alb look for node-ip's to target it to.
+  type: NodePort      #For EC2-node type of eks , alb look for node-ip's to target it to. 
+  #It's been said that when you are using ingress, then service type of ClusterIP is enough.

@@ -12,7 +12,7 @@ spec:
   - http:
       paths:
       #Order /me before / to keep matching unambiguous.
-#      - path: /me      # make sure your application server at /me instead of /
+#      - path: /me      # make sure your application serves at /me instead of /
 #        pathType: Prefix
 #        backend:
 #          service:

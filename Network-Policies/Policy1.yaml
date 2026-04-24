@@ -30,13 +30,13 @@ spec:
           kubernetes.io/metadata.name: firstapp
       podSelector:
         matchLabels:
-          app: firstapp-web
+          app: firstapp-web # <-- your client pods must have this label
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: secondapp
       podSelector:
         matchLabels:
-          app: secondapp-web
+          app: secondapp-web # <-- your client pods must have this label
     # Optional (tighter security): restrict to DB port(s)
     # ports:
     # - protocol: TCP
@@ -47,5 +47,5 @@ spec:
 
 #This combo means:
 
-#By default, no one can talk to any pod in database.
+#By default, no one can talk to any pod in database namespace (except other pods in the same namespace, but you can also block that if you want).
 #Only the specified client pods may talk to pods labeled app=db (and only on ports you list, if you set ports).
