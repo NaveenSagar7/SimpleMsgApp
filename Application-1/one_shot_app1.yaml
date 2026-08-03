@@ -1,0 +1,297 @@
+# one_shot_app1.yaml
+# Combined manifest for Application-1, ordered by the sequence resources should be applied in.
+# Source files merged (in order): Namespace, Namespace-Quota.yaml, Configmap.yaml, App_Secrets.yaml,
+# App-Deployment.yaml, HPA.yaml, Ingress.yaml, ingress_canary.yaml (kept commented out below).
+# Excluded on request: App-Deployment-V1.yaml, App-Deployment_vol.yaml
+
+# ---------------------------------------------------------------------------
+# 1. Namespace
+#    The pillar everything else lives under - must exist before any
+#    namespaced resource below can be created.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: firstapp
+
+---
+
+# ---------------------------------------------------------------------------
+# 2. ResourceQuota  (source: Namespace-Quota.yaml)
+#    Applied right after the Namespace so the compute ceiling is in place
+#    before any workload that consumes it is created.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: firstapp
+spec:
+  hard:
+    requests.cpu: "500m" #minimum
+    limits.cpu: "500m"   #maximum
+    requests.memory: "500Mi"
+    limits.memory: "950Mi"
+
+---
+
+# ---------------------------------------------------------------------------
+# 3. ConfigMap  (source: Configmap.yaml)
+#    Must exist before the Deployment that references it via configMapKeyRef.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: firstapp-config
+  namespace: firstapp
+data:
+  DB_HOST: firstapp-db-service.database.svc.cluster.local
+  DB_PORT: "5432"
+
+---
+
+# ---------------------------------------------------------------------------
+# 4. Secret  (source: App_Secrets.yaml)
+#    Must exist before the Deployment that references it via secretKeyRef.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: firstapp-secret
+  namespace: firstapp
+type: Opaque
+data:
+  DB_USER: YWRtaW4=
+  DB_PASSWORD: YWRtaW4xMjM=
+  DB_NAME: c2ltcGxlbXNnYXBwZGI=
+
+---
+
+# ---------------------------------------------------------------------------
+# 5. Deployment  (source: App-Deployment.yaml)
+#    Depends on the ConfigMap and Secret above being present.
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-deployment
+  namespace: firstapp
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: firstapp-web
+  template:
+    metadata:
+      labels:
+        app: firstapp-web
+    spec:
+      containers:
+      - name: firstapp
+        image: naveen352/msgapp:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: firstapp-config
+              key: DB_HOST
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: DB_PASSWORD
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: DB_NAME
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: firstapp-config
+              key: DB_PORT
+        #readinessProbe:
+          #httpGet:
+            #path: /healthy          #App code must have this path set
+            #port: 3000
+          #initialDelaySeconds: 5
+          #periodSeconds: 5
+          #timeoutSeconds: 2
+          #failureThreshold: 3
+          #successThreshold: 1
+        livenessProbe:
+          httpGet:
+            path: /livez            #App code must have this path set
+            port: 3000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+          successThreshold: 1
+        resources:
+          requests:
+            cpu: "30m"
+            memory: "100Mi"
+          limits:
+            cpu: "60m"
+            memory: "200Mi"
+
+---
+
+# ---------------------------------------------------------------------------
+# 6. Service  (source: App-Deployment.yaml)
+#    Created right after its Deployment; needed before the Ingress/HPA below
+#    can target it.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: firstapp-service
+  namespace: firstapp
+spec:
+  selector:
+    app: firstapp-web
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+  #type: ClusterIP     #Only for Fargate type of EKS
+  type: NodePort      #For EC2-node type of eks , alb look for node-ip's to target it to.
+  #It's been said that when you are using ingress, then service type of ClusterIP is enough.
+
+---
+
+# ---------------------------------------------------------------------------
+# 7. HorizontalPodAutoscaler  (source: HPA.yaml)
+#    Depends on the Deployment above already existing (scaleTargetRef).
+# ---------------------------------------------------------------------------
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: firstapp-hpa
+  namespace: firstapp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: firstapp-deployment
+  minReplicas: 4
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization         # % of each pod's CPU *request*
+        averageUtilization: 50    # e.g., 70% of 300m ≈ 210m per pod
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization         # % of each pod's memory *request*
+        averageUtilization: 50    # e.g., 80% of 384Mi ≈ 307Mi per pod
+#  behavior:                       # optional but recommended to avoid thrash
+#    scaleUp:
+#      stabilizationWindowSeconds: 0
+#      policies:
+#      - type: Percent
+#        value: 100                # at most double per minute
+#        periodSeconds: 60
+#    scaleDown:
+#      stabilizationWindowSeconds: 300
+#      selectPolicy: Max
+#      policies:
+#      - type: Percent
+#        value: 50                 # cut by at most 50% per minute
+#        periodSeconds: 60
+
+#Why behaviour matters (tiny scenario)
+#Target CPU = 70%. Traffic spikes briefly to 200% → HPA wants 3× replicas, then traffic drops.
+#With scaleUp cap = 100%/min, you go 3→6 (not 3→9) and watch again.
+#With scaleDown window = 300s, HPA remembers the recent high need and waits 5 minutes before shrinking below that, preventing thrash back to 3 too soon.
+
+---
+
+# ---------------------------------------------------------------------------
+# 8. Ingress - primary  (source: Ingress.yaml)
+#    Applied after the Service it routes to. This is the active ingress.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: firstapp-alb
+  namespace: firstapp
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: instance   # or "instance" if you use NodePort Services
+spec:
+  ingressClassName: alb
+  rules:
+  - http:
+      paths:
+      #Order /me before / to keep matching unambiguous.
+#      - path: /me      # make sure your application serves at /me instead of /
+#        pathType: Prefix
+#        backend:
+#          service:
+#            name: secondapp-service
+#            port:
+#              number: 80
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: firstapp-service
+            port:
+              number: 80
+
+# ---------------------------------------------------------------------------
+# 9. Ingress - canary  (source: ingress_canary.yaml)
+#    DISABLED: same metadata.name as the primary ingress above, so it cannot
+#    coexist with it. Kept here commented out for reference/rollout use only -
+#    uncomment in place of the primary Ingress above when doing a canary rollout.
+# ---------------------------------------------------------------------------
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: firstapp-alb
+#   namespace: firstapp
+#   annotations:
+#     alb.ingress.kubernetes.io/scheme: internet-facing
+#     alb.ingress.kubernetes.io/target-type: ip
+#     # Weighted forward: adjust weights during rollout
+#     alb.ingress.kubernetes.io/actions.weighted-root: >
+#       {"type":"forward","forwardConfig":{"targetGroups":[
+#         {"serviceName":"firstapp-service","servicePort":"80","weight":75},
+#         {"serviceName":"firstapp-v1-service","servicePort":"80","weight":25}
+#       ]}}
+# spec:
+#   ingressClassName: alb
+#   rules:
+#   - http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: weighted-root
+#             port:
+#               name: use-annotation
+#       # Optional: direct path to me for smoke tests
+#     - path: /v1
+#        pathType: Prefix
+#        backend:
+#          service:
+#            name: firstapp-v1-service
+#            port:
+#              number: 80
+#
+# NOTE : MAKE SURE YOUR NEW VERSIONED APP SERVERS AT BOTH / AND /v1 IF YOU USE SMOKE TESTS

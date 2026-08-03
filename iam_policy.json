@@ -1,3 +1,5 @@
+//This is used to create a policy for the AWS Load Balancer Controller. It is based on the official AWS documentation for the controller's IAM policy requirements.
+
 {
     "Version": "2012-10-17",
     "Statement": [

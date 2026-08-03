@@ -1,0 +1,182 @@
+# one_shot_db.yaml
+# Combined manifest for App-Database, ordered by the sequence resources should be applied in.
+# Source files merged (in order): Namespace, Db_Secrets.yaml, Db-Deployment.yaml, Network-Policy.yaml
+# Excluded on request: Db-Deployment_vol.yaml
+
+# ---------------------------------------------------------------------------
+# 1. Namespace
+#    The pillar everything else lives under - must exist before any
+#    namespaced resource below can be created.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: database
+
+---
+
+# ---------------------------------------------------------------------------
+# 2. Secret  (source: Db_Secrets.yaml)
+#    Must exist before the Deployment that references it via secretKeyRef.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: firstapp-secret
+  namespace: database
+type: Opaque
+data:
+  POSTGRES_DB: c2ltcGxlbXNnYXBwZGI=
+  POSTGRES_USER: YWRtaW4=
+  POSTGRES_PASSWORD: YWRtaW4xMjM=
+
+---
+
+# ---------------------------------------------------------------------------
+# 3. Deployment  (source: Db-Deployment.yaml)
+#    Depends on the Secret above being present.
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-db-deployment
+  namespace: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firstapp-db-web
+  template:
+    metadata:
+      labels:
+        app: firstapp-db-web
+    spec:
+      containers:
+      - name: firstapp-db
+        image: naveen352/msgapp-db:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: POSTGRES_PASSWORD
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "200Mi"
+          limits:
+            cpu: "250m"
+            memory: "400Mi"
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready      #the official postgres:16 image includes pg_isready endpoint
+            - -h
+            - 127.0.0.1
+            - -p
+            - '5432'
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+          successThreshold: 1
+        livenessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+
+---
+
+# ---------------------------------------------------------------------------
+# 4. Service  (source: Db-Deployment.yaml)
+#    Created right after its Deployment.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: firstapp-db-service
+  namespace: database
+spec:
+  selector:
+    app: firstapp-db-web
+  ports:
+  - protocol: TCP
+    port: 5432
+    targetPort: 5432
+  type: ClusterIP
+
+---
+
+# ---------------------------------------------------------------------------
+# 5. NetworkPolicy  (source: Network-Policy.yaml)
+#    Applied last: locks the namespace down (deny-all) then allow-lists
+#    traffic from the app pods to the DB pods created above.
+# ---------------------------------------------------------------------------
+#(recommended): Lock down the whole database namespace, then allow-list of what that can be accessed by db
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: database
+spec:
+  podSelector: {}         # select ALL pods in this namespace
+  policyTypes:
+  - Ingress               # deny all ingress by default
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-allow-apps
+  namespace: database
+spec:
+  podSelector:
+    matchLabels:
+      app: firstapp-db-web             # <-- your DB pods must have this label
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: firstapp
+      podSelector:
+        matchLabels:
+          app: firstapp-web
+#    - namespaceSelector:
+#        matchLabels:
+#          kubernetes.io/metadata.name: secondapp
+#      podSelector:
+#        matchLabels:
+#          app: secondapp-web
+    # Optional (tighter security): restrict to DB port(s)
+    # ports:
+    # - protocol: TCP
+    #   port: 5432   # e.g., Postgres
+    # - protocol: TCP
+    #   port: 3306   # e.g., MySQL
+
+
+#This combo means:
+
+#By default, no one can talk to any pod in database.
+#Only the specified client pods may talk to pods labeled app=db (and only on ports you list, if you set ports).

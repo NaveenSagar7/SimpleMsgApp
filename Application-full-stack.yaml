@@ -1,0 +1,499 @@
+# simplemsgapp-full-stack.yaml
+# Single-file deployment manifest for the entire Simplemsgapp stack (database + Application-1),
+# ordered end-to-end by the sequence resources should be applied in.
+#
+# Source files merged:
+#   Database tier : App-Database/one_shot_db.yaml
+#   App tier      : Application-1/one_shot_app1.yaml
+#
+# Excluded (per prior instructions): Db-Deployment_vol.yaml, App-Deployment-V1.yaml, App-Deployment_vol.yaml
+# Apply with: kubectl apply -f simplemsgapp-full-stack.yaml
+
+# =============================================================================
+# NAMESPACES
+# Both namespaces are created up front since every resource below is scoped
+# to one of them, and the database NetworkPolicy references "firstapp" by name.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# 1. Namespace - database
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: database
+
+---
+
+# ---------------------------------------------------------------------------
+# 2. Namespace - firstapp
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: firstapp
+
+---
+
+# =============================================================================
+# DATABASE TIER
+# Stood up before the app tier since the app's ConfigMap points at the DB
+# Service's DNS name and its pods depend on the DB being reachable.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# 3. Secret - firstapp-secret (database)
+#    Must exist before the DB Deployment that references it via secretKeyRef.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: firstapp-secret
+  namespace: database
+type: Opaque
+data:
+  POSTGRES_DB: c2ltcGxlbXNnYXBwZGI=
+  POSTGRES_USER: YWRtaW4=
+  POSTGRES_PASSWORD: YWRtaW4xMjM=
+
+---
+
+# ---------------------------------------------------------------------------
+# 4. Deployment - firstapp-db-deployment
+#    Depends on the Secret above being present.
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-db-deployment
+  namespace: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firstapp-db-web
+  template:
+    metadata:
+      labels:
+        app: firstapp-db-web
+    spec:
+      containers:
+      - name: firstapp-db
+        image: naveen352/msgapp-db:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: POSTGRES_PASSWORD
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "200Mi"
+          limits:
+            cpu: "250m"
+            memory: "400Mi"
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready      #the official postgres:16 image includes pg_isready endpoint
+            - -h
+            - 127.0.0.1
+            - -p
+            - '5432'
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+          successThreshold: 1
+        livenessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+
+---
+
+# ---------------------------------------------------------------------------
+# 5. Service - firstapp-db-service
+#    Created right after its Deployment; this is the DNS name the app's
+#    ConfigMap (DB_HOST) points at.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: firstapp-db-service
+  namespace: database
+spec:
+  selector:
+    app: firstapp-db-web
+  ports:
+  - protocol: TCP
+    port: 5432
+    targetPort: 5432
+  type: ClusterIP
+
+---
+
+# ---------------------------------------------------------------------------
+# 6. NetworkPolicy - default-deny-ingress (database)
+#    Locks the database namespace down before the allow-list rule below
+#    opens the one path that should exist.
+# ---------------------------------------------------------------------------
+#(recommended): Lock down the whole database namespace, then allow-list of what that can be accessed by db
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: database
+spec:
+  podSelector: {}         # select ALL pods in this namespace
+  policyTypes:
+  - Ingress               # deny all ingress by default
+
+---
+
+# ---------------------------------------------------------------------------
+# 7. NetworkPolicy - db-allow-apps (database)
+#    Allow-lists traffic from firstapp's app pods (namespace "firstapp",
+#    label app=firstapp-web) to the DB pods created above.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-allow-apps
+  namespace: database
+spec:
+  podSelector:
+    matchLabels:
+      app: firstapp-db-web             # <-- your DB pods must have this label
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: firstapp
+      podSelector:
+        matchLabels:
+          app: firstapp-web
+#    - namespaceSelector:
+#        matchLabels:
+#          kubernetes.io/metadata.name: secondapp
+#      podSelector:
+#        matchLabels:
+#          app: secondapp-web
+    # Optional (tighter security): restrict to DB port(s)
+    # ports:
+    # - protocol: TCP
+    #   port: 5432   # e.g., Postgres
+    # - protocol: TCP
+    #   port: 3306   # e.g., MySQL
+
+#This combo means:
+#By default, no one can talk to any pod in database.
+#Only the specified client pods may talk to pods labeled app=db (and only on ports you list, if you set ports).
+
+---
+
+# =============================================================================
+# APPLICATION TIER (Application-1)
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# 8. ResourceQuota - compute-quota (firstapp)
+#    Applied before any app-tier workload so the compute ceiling is in place.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: firstapp
+spec:
+  hard:
+    requests.cpu: "500m" #minimum
+    limits.cpu: "500m"   #maximum
+    requests.memory: "500Mi"
+    limits.memory: "950Mi"
+
+---
+
+# ---------------------------------------------------------------------------
+# 9. ConfigMap - firstapp-config
+#    Must exist before the app Deployment that references it via configMapKeyRef.
+#    DB_HOST points at the database Service created in step 5.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: firstapp-config
+  namespace: firstapp
+data:
+  DB_HOST: firstapp-db-service.database.svc.cluster.local
+  DB_PORT: "5432"
+
+---
+
+# ---------------------------------------------------------------------------
+# 10. Secret - firstapp-secret (firstapp)
+#     Must exist before the app Deployment that references it via secretKeyRef.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: firstapp-secret
+  namespace: firstapp
+type: Opaque
+data:
+  DB_USER: YWRtaW4=
+  DB_PASSWORD: YWRtaW4xMjM=
+  DB_NAME: c2ltcGxlbXNnYXBwZGI=
+
+---
+
+# ---------------------------------------------------------------------------
+# 11. Deployment - firstapp-deployment
+#     Depends on the ConfigMap and Secret above being present, and on the
+#     database tier already being reachable at DB_HOST.
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-deployment
+  namespace: firstapp
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: firstapp-web
+  template:
+    metadata:
+      labels:
+        app: firstapp-web
+    spec:
+      containers:
+      - name: firstapp
+        image: naveen352/msgapp:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: firstapp-config
+              key: DB_HOST
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: DB_PASSWORD
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: firstapp-secret
+              key: DB_NAME
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: firstapp-config
+              key: DB_PORT
+        #readinessProbe:
+          #httpGet:
+            #path: /healthy          #App code must have this path set
+            #port: 3000
+          #initialDelaySeconds: 5
+          #periodSeconds: 5
+          #timeoutSeconds: 2
+          #failureThreshold: 3
+          #successThreshold: 1
+        livenessProbe:
+          httpGet:
+            path: /livez            #App code must have this path set
+            port: 3000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+          successThreshold: 1
+        resources:
+          requests:
+            cpu: "30m"
+            memory: "100Mi"
+          limits:
+            cpu: "60m"
+            memory: "200Mi"
+
+---
+
+# ---------------------------------------------------------------------------
+# 12. Service - firstapp-service
+#     Created right after its Deployment; needed before the HPA/Ingress below
+#     can target it.
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: firstapp-service
+  namespace: firstapp
+spec:
+  selector:
+    app: firstapp-web
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+  #type: ClusterIP     #Only for Fargate type of EKS
+  type: NodePort      #For EC2-node type of eks , alb look for node-ip's to target it to.
+  #It's been said that when you are using ingress, then service type of ClusterIP is enough.
+
+---
+
+# ---------------------------------------------------------------------------
+# 13. HorizontalPodAutoscaler - firstapp-hpa
+#     Depends on the Deployment above already existing (scaleTargetRef).
+# ---------------------------------------------------------------------------
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: firstapp-hpa
+  namespace: firstapp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: firstapp-deployment
+  minReplicas: 4
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization         # % of each pod's CPU *request*
+        averageUtilization: 50    # e.g., 70% of 300m ≈ 210m per pod
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization         # % of each pod's memory *request*
+        averageUtilization: 50    # e.g., 80% of 384Mi ≈ 307Mi per pod
+#  behavior:                       # optional but recommended to avoid thrash
+#    scaleUp:
+#      stabilizationWindowSeconds: 0
+#      policies:
+#      - type: Percent
+#        value: 100                # at most double per minute
+#        periodSeconds: 60
+#    scaleDown:
+#      stabilizationWindowSeconds: 300
+#      selectPolicy: Max
+#      policies:
+#      - type: Percent
+#        value: 50                 # cut by at most 50% per minute
+#        periodSeconds: 60
+
+#Why behaviour matters (tiny scenario)
+#Target CPU = 70%. Traffic spikes briefly to 200% → HPA wants 3× replicas, then traffic drops.
+#With scaleUp cap = 100%/min, you go 3→6 (not 3→9) and watch again.
+#With scaleDown window = 300s, HPA remembers the recent high need and waits 5 minutes before shrinking below that, preventing thrash back to 3 too soon.
+
+---
+
+# ---------------------------------------------------------------------------
+# 14. Ingress - firstapp-alb (primary)
+#     Applied after the Service it routes to. This is the active ingress.
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: firstapp-alb
+  namespace: firstapp
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: instance   # or "instance" if you use NodePort Services
+spec:
+  ingressClassName: alb
+  rules:
+  - http:
+      paths:
+      #Order /me before / to keep matching unambiguous.
+#      - path: /me      # make sure your application serves at /me instead of /
+#        pathType: Prefix
+#        backend:
+#          service:
+#            name: secondapp-service
+#            port:
+#              number: 80
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: firstapp-service
+            port:
+              number: 80
+
+# ---------------------------------------------------------------------------
+# 15. Ingress - firstapp-alb (canary) - DISABLED
+#     Same metadata.name as the primary ingress above, so it cannot coexist
+#     with it. Kept here commented out for reference/rollout use only -
+#     uncomment in place of the primary Ingress above when doing a canary rollout.
+# ---------------------------------------------------------------------------
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: firstapp-alb
+#   namespace: firstapp
+#   annotations:
+#     alb.ingress.kubernetes.io/scheme: internet-facing
+#     alb.ingress.kubernetes.io/target-type: ip
+#     # Weighted forward: adjust weights during rollout
+#     alb.ingress.kubernetes.io/actions.weighted-root: >
+#       {"type":"forward","forwardConfig":{"targetGroups":[
+#         {"serviceName":"firstapp-service","servicePort":"80","weight":75},
+#         {"serviceName":"firstapp-v1-service","servicePort":"80","weight":25}
+#       ]}}
+# spec:
+#   ingressClassName: alb
+#   rules:
+#   - http:
+#       paths:
+#       - path: /
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: weighted-root
+#             port:
+#               name: use-annotation
+#       # Optional: direct path to me for smoke tests
+#     - path: /v1
+#        pathType: Prefix
+#        backend:
+#          service:
+#            name: firstapp-v1-service
+#            port:
+#              number: 80
+#
+# NOTE : MAKE SURE YOUR NEW VERSIONED APP SERVERS AT BOTH / AND /v1 IF YOU USE SMOKE TESTS
