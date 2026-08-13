@@ -20,3 +20,6 @@ spec:
     min:
       cpu: "100m"       # containers must request at least this
       memory: "128Mi"
+
+#if no resources are specified in the pod spec, the defaults from the LimitRange will be applied. 
+#If a container specifies resources, those values will override the defaults, but must still respect any min/max constraints defined in the LimitRange.

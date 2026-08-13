@@ -1,0 +1,99 @@
+# 1. Deployment using the hostPath-backed PVC.
+# Must land on the node holding /mnt/data/firstapp, so it's pinned
+# with nodeSelector/nodeName in real use - fine for single-node/dev only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-deployment-hostpath
+  namespace: firstapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firstapp-web-hostpath
+  template:
+    metadata:
+      labels:
+        app: firstapp-web-hostpath
+    spec:
+      containers:
+      - name: firstapp
+        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/firstapp:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+        - name: firstapp-storage
+          mountPath: /usr/src/app/data
+      volumes:
+      - name: firstapp-storage
+        persistentVolumeClaim:
+          claimName: firstapp-pvc-hostpath
+
+---
+
+# 2. Deployment using the EBS-backed PVC.
+# EBS is ReadWriteOnce, so keep replicas at 1 - a second pod on another
+# node would fail to attach the same volume.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-deployment-ebs
+  namespace: firstapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firstapp-web-ebs
+  template:
+    metadata:
+      labels:
+        app: firstapp-web-ebs
+    spec:
+      containers:
+      - name: firstapp
+        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/firstapp:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+        - name: firstapp-storage
+          mountPath: /usr/src/app/data
+      volumes:
+      - name: firstapp-storage
+        persistentVolumeClaim:
+          claimName: firstapp-pvc-ebs
+
+---
+
+# 3. Deployment using the EFS-backed PVC.
+# EFS is ReadWriteMany, so this can safely scale beyond 1 replica -
+# every pod, on any node, mounts the same shared filesystem.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-deployment-efs
+  namespace: firstapp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: firstapp-web-efs
+  template:
+    metadata:
+      labels:
+        app: firstapp-web-efs
+    spec:
+      containers:
+      - name: firstapp
+        image: 149536497934.dkr.ecr.ap-south-1.amazonaws.com/firstapp:1.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+        - name: firstapp-storage
+          mountPath: /usr/src/app/data
+      volumes:
+      - name: firstapp-storage
+        persistentVolumeClaim:
+          claimName: firstapp-pvc-efs

@@ -1,0 +1,48 @@
+# 1. PVC for the hostPath PV.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: firstapp-pvc-hostpath
+  namespace: firstapp
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: manual
+  volumeName: firstapp-pv-hostpath
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+
+# 2. PVC for the EBS PV.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: firstapp-pvc-ebs
+  namespace: firstapp
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ebs-sc
+  volumeName: firstapp-pv-ebs
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+
+# 3. PVC for the EFS PV.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: firstapp-pvc-efs
+  namespace: firstapp
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: efs-sc
+  volumeName: firstapp-pv-efs
+  resources:
+    requests:
+      storage: 5Gi
